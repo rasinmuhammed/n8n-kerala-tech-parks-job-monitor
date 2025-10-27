@@ -1,0 +1,572 @@
+{
+  "name": "Kerala Tech Parks Job Monitor (Filtered)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 12
+            }
+          ]
+        }
+      },
+      "id": "5a293fb5-e688-43ec-8490-3a36124a3c65",
+      "name": "Schedule Every 12 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -320,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://www.ulcyberpark.com/jobs",
+        "options": {}
+      },
+      "id": "724e20fc-ece3-46fc-97fb-cd035f7c0e73",
+      "name": "Fetch UL Cyberpark Jobs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -112,
+        -112
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://technopark.in/api/paginated-jobs",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "options": {
+          "pagination": {}
+        }
+      },
+      "id": "5350e604-a37c-4d8d-9b9e-a98a22271c5a",
+      "name": "Fetch Technopark Jobs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -112,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://infopark.in/companies/job-search",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "page",
+              "value": "1"
+            },
+            {
+              "name": "search"
+            },
+            {
+              "name": "type"
+            }
+          ]
+        },
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "id": "908fb946-3180-4d82-b165-cb329a8aa318",
+      "name": "Fetch Infopark Jobs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -112,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract job listings from UL Cyberpark\nconst html = $input.item.json.data;\nconst jobs = [];\n\n// Regex to find an entire job row (everything between <tr> and </tr>)\n// The 's' flag is important: it makes '.' match newline characters.\nconst jobRowRegex = /<tr.*?>(.*?)<\\/tr>/gs;\n\n// Regexes to find specific data *within* a single row\nconst titleRegex = /<a class=\"btn-1 btn-f-style cls_for_style\"[^>]*>(.*?)<\\/a>/;\nconst dateRegex = /closing date: ([\\d-]+)/;\nconst companyRegex = /<a class=\"btn-1 btn-f-style cls_for_style\" href=.*?>(.*?)<\\/a>/;\nconst jobLinkRegex = /href=\"https:\\/\\/www\\.ulcyberpark\\.com\\/jobs\\/job_vacancy\\?job_id=(\\d+)\"/;\n\nlet rowMatch;\n\n// Loop through every job row found in the HTML\nwhile ((rowMatch = jobRowRegex.exec(html)) !== null) {\n  \n  // Get the content inside the <tr> tags\n  const rowContent = rowMatch[1];\n\n  // Run the specific regexes on this row's content\n  const titleMatch = rowContent.match(titleRegex);\n  const dateMatch = rowContent.match(dateRegex);\n  const companyMatch = rowContent.match(companyRegex);\n  const jobLinkMatch = rowContent.match(jobLinkRegex);\n\n  // We must have a job link/ID to consider it a valid job\n  if (jobLinkMatch && jobLinkMatch[1]) {\n    const jobId = jobLinkMatch[1];\n    \n    // Extract data, providing 'N/A' as a fallback if not found\n    const title = titleMatch ? titleMatch[1].trim() : 'N/A';\n    const company = companyMatch ? companyMatch[1].trim() : 'N/A';\n    const closing_date = dateMatch ? dateMatch[1].trim() : 'N/A';\n    const url = `https://www.ulcyberpark.com/jobs/job_vacancy?job_id=${jobId}`;\n\n    // Add the structured job object to our array\n    jobs.push({\n      id: `ulcyber_${jobId}`,\n      title: title,\n      company: company,\n      closing_date: closing_date,\n      url: url,\n      source: 'UL Cyberpark'\n    });\n  }\n}\n\nreturn jobs.map(job => ({ json: job }));"
+      },
+      "id": "42041eb6-8b5b-45d1-b611-554da0b29e80",
+      "name": "Parse UL Cyberpark",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        96,
+        -112
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// This code goes inside a \"Code Node\" in n8n\n\n// Get the API response (it's the first and only item)\nconst apiResponse = items[0].json;\n\n// The jobs are inside the 'data' array\nconst jobArray = apiResponse.data;\n\nconst formattedJobs = [];\n\n// Loop through each job in the 'data' array\nfor (const job of jobArray) {\n  \n  // Format the job into the clean structure you want\n  formattedJobs.push({\n    id: `technopark_${job.id}`,\n    title: job.job_title,\n    company: job.company.company, // Accessing the nested company name\n    closing_date: job.closing_date,\n    url: `https://technopark.in/job-details/${job.id}`, // Building the URL\n    source: 'Technopark'\n  });\n}\n\n// Return each formatted job as a new item for the workflow\nreturn formattedJobs.map(job => ({ json: job }));"
+      },
+      "id": "ecbe7214-36f3-425b-aeba-8579a627982e",
+      "name": "Parse Technopark",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        96,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the JSON response from the \"Fetch Jobs API\" node\n// The actual HTML content is inside the 'html' key\nconst htmlString = $input.item.json.html; \nconst jobs = [];\n\n// Regex to find each job listing block (the <li> element)\n// Capture the post-ID (e.g., 11404) from the class name\n// 's' flag allows '.' to match newlines\nconst jobRowRegex = /<li class=\"post-(\\d+) job_listing.*?>(.*?)<\\/li>/gs;\n\n// Regexes to find specific data *within* a single job block\nconst urlRegex = /<a href=\"(https:\\/\\/cyberparks\\.in\\/job\\/[^\"]+)\">/;\nconst titleRegex = /<h3>(.*?)<\\/h3>/;\nconst companyRegex = /<div class=\"company\">\\s*<strong>(.*?)<\\/strong>/;\nconst dateRegex = /<time datetime=\"([\\d-]+)\">/; // Get the actual date YYYY-MM-DD\nconst locationRegex = /<div class=\"location\">\\s*([^<]+?)\\s*<\\/div>/; // Extract location\n\nlet rowMatch;\n\n// Loop through all job rows found in the HTML string\nwhile ((rowMatch = jobRowRegex.exec(htmlString)) !== null) {\n  \n  // The post ID (e.g., 11404) is the first capture group\n  const jobId = rowMatch[1];\n  \n  // The inner content of the <li> is the second capture group\n  const rowContent = rowMatch[2];  \n\n  // Run specific regexes on this row's content\n  const urlMatch = rowContent.match(urlRegex);\n  const titleMatch = rowContent.match(titleRegex);\n  const companyMatch = rowContent.match(companyRegex);\n  const dateMatch = rowContent.match(dateRegex);\n  const locationMatch = rowContent.match(locationRegex);\n\n  // We need at least an ID and a URL to consider it valid\n  if (jobId && urlMatch && urlMatch[1]) {\n    \n    const url = urlMatch[1];\n    const title = titleMatch ? titleMatch[1].trim() : 'N/A';\n    const company = companyMatch ? companyMatch[1].trim() : 'N/A';\n    \n    // NOTE: This is the \"posted date\", not closing date.\n    // Use the datetime attribute for a clean date format.\n    const posted_date = dateMatch ? dateMatch[1].trim() : 'N/A';\n    const location = locationMatch ? locationMatch[1].trim() : 'N/A';\n\n    jobs.push({\n      id: `cyberpark_${jobId}`,\n      title: title,\n      company: company,\n      closing_date: posted_date, // This is the \"posted date\"\n      location: location,        // Added location\n      url: url,\n      source: 'Cyberpark Kozhikode'\n    });\n  }\n}\n\n// Return each job as a separate item for the n8n workflow\nreturn jobs.map(job => ({ json: job }));"
+      },
+      "id": "322df4ce-0b3c-4369-b62f-7555efd11e63",
+      "name": "Parse Cyberpark",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        96,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the HTML data from the previous node\nconst html = $input.item.json.data; \nconst jobs = [];\n\n// Regex to find each job row (everything between <tr> and </tr>, excluding the header row)\n// 's' flag allows '.' to match newlines. Look for rows that don't contain <th>\nconst jobRowRegex = /<tr[^>]*>(?!.*?<th.*?<\\/tr>)(.*?)<\\/tr>/gs;\n\n// Regexes to find specific data *within* a single row (<td> elements)\n// Order matters here: Posted Date, Title, Company, Closing Date, URL\nconst postedDateRegex = /<td class=\"head\">([\\d-]+)<\\/td>/; // Capture the first date (Posted)\nconst titleRegex = /<td class=\"head\">([^<]+)<\\/td>/; // Capture the content of the second \"head\" cell\nconst companyRegex = /<td class=\"date\">([^<]+)<\\/td>/; // Capture the company name\nconst closingDateRegex = /<td>(\\d{1,2}\\s+\\w+\\s+\\d{4})<\\/td>/; // Capture the closing date (e.g., 27 Oct 2025)\nconst urlRegex = /<a href=\"(https:\\/\\/infopark\\.in\\/company-jobs\\/details\\/[^\"]+)\">/; // Capture the details URL\n\nlet rowMatch;\nlet rowCounter = 0; // To help differentiate cells in the same row\n\n// Loop through all job rows found in the HTML\nwhile ((rowMatch = jobRowRegex.exec(html)) !== null) {\n  \n  const rowContent = rowMatch[1]; // The content inside the <tr> tags\n\n  // Run specific regexes on this row's content\n  const postedDateMatch = rowContent.match(postedDateRegex);\n  const titleMatch = rowContent.match(titleRegex); // This needs refinement\n  const companyMatch = rowContent.match(companyRegex);\n  const closingDateMatch = rowContent.match(closingDateRegex);\n  const urlMatch = rowContent.match(urlRegex);\n  \n  // Refine title extraction: Find all <td class=\"head\"> and take the second one\n  const allHeadCells = rowContent.match(/<td class=\"head\">([^<]+)<\\/td>/g);\n  let actualTitle = 'N/A';\n  if (allHeadCells && allHeadCells.length > 1) {\n      // Extract content from the second match\n      const secondTitleMatch = /<td class=\"head\">([^<]+)<\\/td>/.exec(allHeadCells[1]);\n      if (secondTitleMatch) {\n          actualTitle = secondTitleMatch[1].trim();\n      }\n  }\n\n  // We need at least a URL to consider it valid\n  if (urlMatch && urlMatch[1]) {\n    // Extract Job ID from the URL (e.g., /details/20488/421 -> 20488)\n    const urlParts = urlMatch[1].split('/');\n    const jobId = urlParts[urlParts.length - 2] || `unknown_${rowCounter++}`; // Use index as fallback\n\n    const url = urlMatch[1];\n    const posted_date = postedDateMatch ? postedDateMatch[1].trim() : 'N/A';\n    const company = companyMatch ? companyMatch[1].trim() : 'N/A';\n    const closing_date = closingDateMatch ? closingDateMatch[1].trim() : 'N/A';\n\n    jobs.push({\n      id: `infopark_${jobId}`,\n      title: actualTitle,\n      company: company,\n      posted_date: posted_date, // Added posted date\n      closing_date: closing_date, \n      url: url,\n      source: 'Infopark'\n    });\n  }\n}\n\n// Return each job as a separate item for the n8n workflow\nreturn jobs.map(job => ({ json: job }));"
+      },
+      "id": "b5e09cef-bebd-4277-83aa-452686e8fb24",
+      "name": "Parse Infopark",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        96,
+        256
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "04da91f8-da7a-4488-a345-993fa022a0aa",
+      "name": "Merge All Jobs",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [
+        288,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filter jobs by keywords\nconst items = $input.all();\n\n// CUSTOMIZE YOUR KEYWORDS HERE\nconst keywords = [\n  'software engineer',\n  'ai engineer',\n  'ml engineer',\n  'machine learning',\n  'artificial intelligence',\n  'python developer',\n  'backend engineer',\n  'backend developer',\n  'full stack engineer',\n  'full stack developer',\n  'fullstack',\n  'fresher',\n  'data analyst',\n  'data scientist',\n  'data engineer',\n  'data',\n  'developer',\n  'engineer'\n];\n\n// Filter jobs that match any keyword\nconst filteredJobs = items.filter(item => {\n  const job = item.json;\n  \n  // Skip items without proper job data\n  if (!job.title || job.message) return false;\n  \n  // Convert title to lowercase for case-insensitive matching\n  const titleLower = job.title.toLowerCase();\n  \n  // Check if any keyword matches\n  return keywords.some(keyword => titleLower.includes(keyword.toLowerCase()));\n});\n\nconsole.log(`Filtered: ${filteredJobs.length} matching jobs out of ${items.length} total jobs`);\n\nreturn filteredJobs;"
+      },
+      "id": "f1d69038-6734-4df8-a665-ac72a63d2de0",
+      "name": "Filter by Keywords",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        496,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAllKeys"
+      },
+      "id": "1147f7ce-00cd-490a-bd2d-ae535a830484",
+      "name": "Get Stored Job IDs",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        496,
+        208
+      ],
+      "credentials": {
+        "redis": {
+          "id": "",
+          "name": "Redis account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compare current jobs with stored jobs to find new ones\nconst currentJobs = $input.all(0); // Get all items from the FIRST input branch\nconst storedJobsData = $input.all(1); // Get all items from the SECOND input branch\n\n// --- rest of your code remains the same ---\n\n// Extract stored job IDs (Redis returns keys)\nconst storedIds = new Set(\n  storedJobsData\n    .map(item => item.json.key)\n    .filter(key => key && key.startsWith('job_'))\n    .map(key => key.replace('job_', ''))\n);\n\n// Filter for new jobs only\nconst newJobs = currentJobs.filter(item => {\n  const job = item.json;\n  // Skip items without proper job data\n  if (!job || !job.id || job.message) return false; // Added check for job existence\n  return !storedIds.has(job.id);\n});\n\nconsole.log(`Found ${newJobs.length} new matching jobs`);\nconsole.log(`Previously stored: ${storedIds.size} jobs`);\n\nreturn newJobs;"
+      },
+      "id": "194b3244-8ff2-4d92-8f83-76f9da6c2e4c",
+      "name": "Find New Jobs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        688,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.title.length }}",
+              "operation": "larger"
+            }
+          ]
+        }
+      },
+      "id": "1c8c68b1-6ca8-4c59-94bd-98e8659fbc07",
+      "name": "Any New Jobs?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        896,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format new jobs into email content\nconst items = $input.all();\n\nif (items.length === 0) {\n  return [];\n}\n\nlet emailBody = `<h2>🎯 New Matching Job Postings Found!</h2>`;\nemailBody += `<p>Found <strong>${items.length}</strong> new job posting(s) matching your criteria in Kerala Tech Parks:</p><hr>`;\n\nitems.forEach(item => {\n  const job = item.json;\n  emailBody += `\n    <div style=\"margin-bottom: 20px; padding: 15px; border-left: 4px solid #0066cc; background-color: #f5f5f5;\">\n      <h3 style=\"margin-top: 0; color: #0066cc;\">${job.title}</h3>\n      <p><strong>Company:</strong> ${job.company}</p>\n      <p><strong>Source:</strong> ${job.source}</p>\n      ${job.closing_date ? `<p><strong>Closing Date:</strong> ${job.closing_date}</p>` : ''}\n      <p><a href=\"${job.url}\" style=\"color: #0066cc; text-decoration: none; font-weight: bold;\">View Job Details →</a></p>\n    </div>\n  `;\n});\n\nemailBody += `<hr><p style=\"color: #666; font-size: 12px;\">This is an automated notification from your Kerala Tech Parks Job Monitor. Only jobs matching your keywords are shown.</p>`;\n\nreturn [{\n  json: {\n    subject: `🔔 ${items.length} New Matching Job${items.length > 1 ? 's' : ''} - Kerala Tech Parks`,\n    body: emailBody,\n    jobCount: items.length\n  }\n}];"
+      },
+      "id": "cb37e1bc-913c-4a08-8233-65c6a4325cd7",
+      "name": "Format Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1088,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "@gmail.com",
+        "subject": "={{ $json.subject }}",
+        "message": "={{ $json.body }}",
+        "options": {}
+      },
+      "id": "e4a6cdf0-6391-43de-895f-906ee3f2ad37",
+      "name": "Send Email Notification",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1296,
+        0
+      ],
+      "webhookId": "0c2458b0-cb2d-41a7-ab25-1a5554bd023e",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "set",
+        "key": "=job_{{ $json.id }}",
+        "value": "={{ $json.title }}"
+      },
+      "id": "83cd70fd-0e1a-4855-af76-c59e955e7273",
+      "name": "Store Job IDs",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        1088,
+        160
+      ],
+      "credentials": {
+        "redis": {
+          "id": "",
+          "name": "Redis account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://cyberparks.in/careers/",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -288,
+        160
+      ],
+      "id": "0e2f585d-24aa-44e9-b11b-8b8d2992ea4e",
+      "name": "Get Cookies for CyberPark"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://cyberparks.in/jm-ajax/get_listings/",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
+            },
+            {
+              "name": "X-Requested-With",
+              "value": "XMLHttpRequest"
+            },
+            {
+              "name": "Referer",
+              "value": "https://cyberparks.in/careers/"
+            },
+            {
+              "name": "Origin",
+              "value": "https://cyberparks.in"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "per_page",
+              "value": "50"
+            },
+            {
+              "name": "orderby",
+              "value": "featured"
+            },
+            {
+              "name": "order",
+              "value": "DESC"
+            },
+            {
+              "name": "page",
+              "value": "1"
+            },
+            {
+              "name": "post_id",
+              "value": "39"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -112,
+        144
+      ],
+      "id": "0b5fb715-7959-435f-9154-43456754cf4f",
+      "name": "Fetch Jobs API - CyberPark"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Fetch UL Cyberpark Jobs": {
+      "main": [
+        [
+          {
+            "node": "Parse UL Cyberpark",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Technopark Jobs": {
+      "main": [
+        [
+          {
+            "node": "Parse Technopark",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Infopark Jobs": {
+      "main": [
+        [
+          {
+            "node": "Parse Infopark",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse UL Cyberpark": {
+      "main": [
+        [
+          {
+            "node": "Merge All Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Technopark": {
+      "main": [
+        [
+          {
+            "node": "Merge All Jobs",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge All Jobs": {
+      "main": [
+        [
+          {
+            "node": "Filter by Keywords",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter by Keywords": {
+      "main": [
+        [
+          {
+            "node": "Find New Jobs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Stored Job IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find New Jobs": {
+      "main": [
+        [
+          {
+            "node": "Any New Jobs?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Any New Jobs?": {
+      "main": [
+        [
+          {
+            "node": "Format Email",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Store Job IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Email": {
+      "main": [
+        [
+          {
+            "node": "Send Email Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Cookies for CyberPark": {
+      "main": [
+        [
+          {
+            "node": "Fetch Jobs API - CyberPark",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Jobs API - CyberPark": {
+      "main": [
+        [
+          {
+            "node": "Parse Cyberpark",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Infopark": {
+      "main": [
+        [
+          {
+            "node": "Merge All Jobs",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Parse Cyberpark": {
+      "main": [
+        [
+          {
+            "node": "Merge All Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Every 12 Hours": {
+      "main": [
+        [
+          {
+            "node": "Fetch UL Cyberpark Jobs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Technopark Jobs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Cookies for CyberPark",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Infopark Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "0250750d-d741-494b-9ab2-7330edb2f4fa",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": ""
+  },
+  "id": "",
+  "tags": []
+}
